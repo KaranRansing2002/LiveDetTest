@@ -34,6 +34,10 @@
 <body>
 
     <div class="container text-center" style="margin-top: 20%;">
+        <select id="cameraSelect" class="form-select mb-3" aria-label="Camera Select" style="display: none;">
+            <option value="environment">Back Camera</option>
+            <option value="user">Front Camera</option>
+        </select>
         <button id="openCameraBtn" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#cameraModal"
             disabled>
             Open Camera
@@ -61,11 +65,13 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="./face-api.min.js"></script> <!-- Ensure this path is correct -->
     <script>
+
         const video = document.getElementById('video');
         const overlay = document.getElementById('overlay');
         const context = overlay.getContext('2d');
         const openCameraBtn = document.getElementById('openCameraBtn');
         const loadingStatus = document.getElementById('loadingStatus');
+        const cameraSelect = document.getElementById('cameraSelect');
 
         async function loadModels() {
             try {
@@ -85,11 +91,22 @@
             }
         }
 
+        function isMobileDevice() {
+            return /Mobi|Android/i.test(navigator.userAgent); // Basic mobile detection
+        }
         var faceDetectionInterval;
 
         function startCamera() {
+
+            const selectedCamera = isMobileDevice() ? cameraSelect.value : 'environment'; // Default to back camera for non-mobile
+            const constraints = {
+                video: {
+                    facingMode: selectedCamera
+                }
+            };
+
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: true })
+                navigator.mediaDevices.getUserMedia(constraints)
                     .then(function (stream) {
                         video.srcObject = stream;
                         video.play();
@@ -138,8 +155,8 @@
         function isFaceInGuider(faceCenterX, faceCenterY, faceWidth, faceHeight) {
             // Guider dimensions based on video size
             const guideHeightPercentage = (window.innerWidth <= 460) ? 0.3 : 0.55;
-            const guideWidthPercentage = (window.innerWidth <= 460) ? 0.3 : 0.35; 
-            
+            const guideWidthPercentage = (window.innerWidth <= 460) ? 0.3 : 0.35;
+
             const guideHeight = video.videoHeight * guideHeightPercentage;
             const guideWidth = video.videoWidth * guideWidthPercentage;
             const guideX = video.videoWidth / 2;
@@ -166,7 +183,7 @@
 
             // Set guide dimensions as a percentage of the video size
             const guideHeightPercentage = (window.innerWidth <= 460) ? 0.3 : 0.55;
-            const guideWidthPercentage = (window.innerWidth <= 460) ? 0.3 : 0.35; 
+            const guideWidthPercentage = (window.innerWidth <= 460) ? 0.3 : 0.35;
 
             const guideHeight = video.videoHeight * guideHeightPercentage;
             const guideWidth = video.videoWidth * guideWidthPercentage;
@@ -183,8 +200,9 @@
             context.stroke();
         }
 
-
-
+        if (isMobileDevice()) {
+            cameraSelect.style.display = 'block'; // Show the dropdown for mobile devices
+        }
 
         loadModels();
 
