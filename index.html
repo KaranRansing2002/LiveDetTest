@@ -137,8 +137,9 @@
         // Function to check if the face is inside the guider
         function isFaceInGuider(faceCenterX, faceCenterY, faceWidth, faceHeight) {
             // Guider dimensions based on video size
-            const guideHeightPercentage = 0.55;
-            const guideWidthPercentage = (window.innerWidth <= 460) ? 0.5 : 0.35; 
+            const guideHeightPercentage = (window.innerWidth <= 460) ? 0.3 : 0.55;
+            const guideWidthPercentage = (window.innerWidth <= 460) ? 0.3 : 0.35; 
+            
             const guideHeight = video.videoHeight * guideHeightPercentage;
             const guideWidth = video.videoWidth * guideWidthPercentage;
             const guideX = video.videoWidth / 2;
@@ -164,8 +165,8 @@
             const guideLineColor = isFaceInside ? '#00FF00' : 'red';
 
             // Set guide dimensions as a percentage of the video size
-            const guideHeightPercentage = 0.55;
-            const guideWidthPercentage = (window.innerWidth <= 460) ? 0.5 : 0.35; 
+            const guideHeightPercentage = (window.innerWidth <= 460) ? 0.3 : 0.55;
+            const guideWidthPercentage = (window.innerWidth <= 460) ? 0.3 : 0.35; 
 
             const guideHeight = video.videoHeight * guideHeightPercentage;
             const guideWidth = video.videoWidth * guideWidthPercentage;
