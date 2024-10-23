@@ -14,7 +14,7 @@
         }
 
         .modal-content {
-            height: 750px;
+            height: 650px;
         }
 
         #overlay {
@@ -31,7 +31,10 @@
 <body>
 
 <div class="container text-center" style="margin-top: 20%;">
-    <button id="openCameraBtn" class="btn btn-primary" disabled>Open Camera</button>
+    <button id="openCameraBtn" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#cameraModal" disabled>
+        Open Camera
+    </button>
+    <p id="loadingStatus">Loading models...</p>
 </div>
 
 <!-- Modal -->
@@ -52,65 +55,85 @@
 
 <!-- Bootstrap JS with Popper.js -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="./face-api.min.js"></script>
+<script src="./face-api.min.js"></script> <!-- Ensure this path is correct -->
 <script>
     const video = document.getElementById('video');
     const overlay = document.getElementById('overlay');
     const context = overlay.getContext('2d');
     const openCameraBtn = document.getElementById('openCameraBtn');
+    const loadingStatus = document.getElementById('loadingStatus');
 
     // Load the face-api.js models
     async function loadModels() {
         try {
+            console.log("Loading models...");
+            // Log each model loading step
             await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
+            console.log("tinyFaceDetector model loaded.");
+            
+            await faceapi.nets.faceLandmark68Net.loadFromUri('./models');
+            console.log("faceLandmark68Net model loaded.");
+
             openCameraBtn.disabled = false; // Enable the button once models are loaded
+            loadingStatus.textContent = 'Models loaded. You can now open the camera!';
         } catch (error) {
+            loadingStatus.textContent = 'Error loading models. Check your paths.';
             console.error("Error loading models:", error);
         }
     }
 
     function startCamera() {
-        console.log("here")
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia({ video: true }).then(function (stream) {
-                video.srcObject = stream;
-                video.play();
-                //detectFaces(); // Start face detection after starting the camera
-            });
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function (stream) {
+                    video.srcObject = stream;
+                    video.play();
+                    console.log("Camera started.");
+                    setInterval(detectSingleFace,200); // Start face detection after starting the camera
+                })
+                .catch(function (error) {
+                    console.error("Error accessing camera:", error);
+                });
+        } else {
+            console.error("Browser does not support camera access.");
         }
     }
 
-    async function detectFaces() {
-        // Clear the overlay canvas
-        context.clearRect(0, 0, overlay.width, overlay.height);
+    async function detectSingleFace() {
+        try {
+            context.clearRect(0, 0, overlay.width, overlay.height);
 
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+            const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
+            console.log("Detection result:", detection); // Log the detection result
 
-        if (detections.length > 0) {
-            // Adjust the overlay canvas to the video size
-            overlay.width = video.videoWidth;
-            overlay.height = video.videoHeight;
+            if (detection) {
+                overlay.width = video.videoWidth;
+                overlay.height = video.videoHeight;
 
-            // Draw a guiding box for each detected face
-            detections.forEach(detection => {
                 const box = detection.box;
                 context.strokeStyle = '#00FF00';
                 context.lineWidth = 4;
                 context.strokeRect(box.x, box.y, box.width, box.height);
-            });
-        }
+                console.log("Face detected at:", box); // Log the detected face's bounding box
+            } else {
+                console.log("No face detected.");
+            }
 
-        requestAnimationFrame(detectFaces);
+        } catch (error) {
+            console.error("Error in face detection:", error);
+        }
     }
 
+    // Load models and initialize the button state
     loadModels();
 
+    // Start the camera when the modal is shown
     document.getElementById('cameraModal').addEventListener('shown.bs.modal', startCamera);
 
+    // Stop the camera when the modal is hidden
     document.getElementById('cameraModal').addEventListener('hidden.bs.modal', function () {
         const stream = video.srcObject;
         const tracks = stream.getTracks();
-
         tracks.forEach(track => track.stop());
         video.srcObject = null;
     });
