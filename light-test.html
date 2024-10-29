@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motion Parallax Liveness Detection</title>
+    <style>
+        /* Basic styles for modal and elements */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            position: relative;
+            width: 80%;
+            max-width: 600px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .close {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 40px;
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        p#instructions {
+            color: #333;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Button to open the modal -->
+    <button id="openModal" style="margin: 20%;">Start Liveness Detection</button>
+
+    <!-- Modal structure -->
+    <div id="myModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closeModal" data-bs-dismiss="modal">&nbsp;&times;</span>
+            
+            <video id="video" autoplay playsinline></video>
+            <canvas id="overlay"></canvas>
+            <p id="instructions">Please move closer to the camera...</p>
+        </div>
+    </div>
+
+    <!-- Include face-api.js -->
+    <script src="face-api.min.js"></script>
+</body>
+
+<script>
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const context = overlay.getContext('2d');
+    const instructions = document.getElementById('instructions');
+    const modal = document.getElementById('myModal');
+    const openModalBtn = document.getElementById('openModal');
+    const closeModalBtn = document.getElementById('closeModal');
+
+    let faceDetectionInterval = null;
+
+    // Open modal and start camera when "Start Liveness Detection" is clicked
+    openModalBtn.addEventListener('click', () => {
+        modal.style.display = 'flex';  // Show modal
+        startCamera();  // Start the camera
+    });
+
+    // Close modal and stop camera feed
+    closeModalBtn.addEventListener('click', () => {
+        modal.style.display = 'none';  // Hide modal
+        stopCamera();  // Stop the camera
+    });
+
+    window.addEventListener('click', (event) => {
+        if (event.target == modal) {
+            modal.style.display = 'none';
+            stopCamera();
+        }
+    });
+
+    // Start the camera feed
+    function startCamera() {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function (stream) {
+                    video.srcObject = stream;
+                    video.play();
+                    detectFace();  // Start detecting the face
+                })
+                .catch(function (error) {
+                    console.error("Error accessing camera:", error);
+                });
+        } else {
+            console.error("Browser does not support camera access.");
+        }
+    }
+
+    // Stop the camera feed
+    function stopCamera() {
+        if (video.srcObject) {
+            const tracks = video.srcObject.getTracks();
+            tracks.forEach(track => track.stop());  // Stop all tracks (video feed)
+            video.srcObject = null;
+        }
+        clearInterval(faceDetectionInterval);  // Stop face detection
+    }
+
+    // Load face-api.js models and start face detection
+    async function detectFace() {
+        await faceapi.nets.tinyFaceDetector.loadFromUri('/models');  // Load models
+        video.addEventListener('playing', () => {
+            overlay.width = video.videoWidth;
+            overlay.height = video.videoHeight;
+            faceDetectionInterval = setInterval(detectBlueReflection, 200);  // Run detection every 200ms
+            startBlueLightTest();
+        });
+    }
+
+    // Function to flash blue light overlay and capture reflection
+    function startBlueLightTest() {
+        context.fillStyle = "rgba(0, 0, 255, 0.3)"; // Light blue overlay
+        context.fillRect(0, 0, overlay.width, overlay.height);
+        console.log("here   ")
+        setTimeout(() => {
+            // Clear the blue overlay after 1 second
+            context.clearRect(0, 0, overlay.width, overlay.height);
+            
+            // Call function to analyze for blue reflection
+            detectBlueReflection();
+        }, 3000);  // 1 second delay
+    }
+
+    // Analyze if blue light is reflecting on the user's face
+    async function detectBlueReflection() {
+        const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
+
+        if (detection) {
+            const box = detection.box;
+            const faceImageData = context.getImageData(box.x, box.y, box.width, box.height);
+            const blueDetected = isBlueReflection(faceImageData);
+
+            if (blueDetected) {
+                console.log("detected")
+                instructions.innerText = "Potential mobile device detected!";
+                instructions.style.color = "red";
+            } else {
+                instructions.innerText = "No reflection detected.";
+                instructions.style.color = "green";
+            }
+        }
+    }
+
+    // Check for blue pixels in face area to detect reflection
+    function isBlueReflection(imageData) {
+        const { data } = imageData;
+        let bluePixelCount = 0;
+        const totalPixels = data.length / 4;
+
+        for (let i = 0; i < data.length; i += 4) {
+            const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
+            if (b > 150 && r < 100 && g < 100) bluePixelCount++; // Detect predominantly blue pixels
+        }
+        
+        // Consider reflection detected if blue pixels exceed a threshold
+        return (bluePixelCount / totalPixels) > 0.1;
+    }
+
+    
+
+</script>
+</html>

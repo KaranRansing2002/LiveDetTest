@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -8,14 +8,28 @@
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        /* Video should fully cover the modal */
         #video {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
 
+        /* Modal full-screen adjustments */
+        .modal-dialog {
+            max-width: 100%;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+        }
+
         .modal-content {
-            height: 650px;
+            width: 550px;
+            height: 720px;
+            border-radius: 0;
+            overflow: hidden;
         }
 
         #overlay {
@@ -32,7 +46,6 @@
 </head>
 
 <body>
-    
     <div class="container text-center" style="margin-top: 20%;">
         <select id="cameraSelect" class="form-select mb-3" aria-label="Camera Select" style="display: none;">
             <option value="environment">Back Camera</option>
@@ -46,15 +59,15 @@
     </div>
 
     <!-- Modal -->
-    <div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true" style="padding: 0;">
-        <div class="modal-dialog modal-dialog-centered" >
+    <div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="cameraModalLabel">Camera Feed</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body" style="position: relative; padding: 0px;">
-                    <video id="video" autoplay></video>
+                <div class="modal-body" style="position: relative; padding: 0;">
+                    <video id="video" autoplay playsinline></video>
                     <canvas id="overlay"></canvas>
                 </div>
             </div>
@@ -133,10 +146,10 @@
             try {
                 // Detect a single face using face-api.js
                 const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
-                
-                
+
+
                 if (detection && detection.box) {
-                    console.log(detection.box)  
+                    console.log(detection.box)
                     const box = detection.box; // Get the bounding box of the detected face
                     const faceCenterX = box.x + box.width / 2;
                     const faceCenterY = box.y + box.height / 2;
