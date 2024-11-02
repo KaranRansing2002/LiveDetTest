@@ -1,12 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Motion Parallax Liveness Detection</title>
     <style>
-
+        /* Basic styles for modal and elements */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
@@ -105,8 +104,6 @@
     const openModalBtn = document.getElementById('openModal');
     const closeModalBtn = document.getElementById('closeModal');
 
-    let initialFaceSize = null;  // Store the initial face size
-    let faceMovementDetected = false;
     let faceDetectionInterval = null;
 
     // Open modal and start camera when "Start Liveness Detection" is clicked
@@ -158,98 +155,64 @@
     // Load face-api.js models and start face detection
     async function detectFace() {
         await faceapi.nets.tinyFaceDetector.loadFromUri('/models');  // Load models
-
         video.addEventListener('playing', () => {
             overlay.width = video.videoWidth;
             overlay.height = video.videoHeight;
-            faceDetectionInterval = setInterval(faceLoop, 200);  // Run detection every 200ms
+            faceDetectionInterval = setInterval(detectBlueReflection, 200);  // Run detection every 200ms
+            startBlueLightTest();
         });
     }
 
-    async function faceLoop() {
+    // Function to flash blue light overlay and capture reflection
+    function startBlueLightTest() {
+        context.fillStyle = "rgba(0, 0, 255, 0.3)"; // Light blue overlay
+        context.fillRect(0, 0, overlay.width, overlay.height);
+        console.log("here   ")
+        setTimeout(() => {
+            // Clear the blue overlay after 1 second
+            context.clearRect(0, 0, overlay.width, overlay.height);
+            
+            // Call function to analyze for blue reflection
+            detectBlueReflection();
+        }, 3000);  // 1 second delay
+    }
+
+    // Analyze if blue light is reflecting on the user's face
+    async function detectBlueReflection() {
         const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
+
         if (detection) {
             const box = detection.box;
-            const faceWidth = box.width;
+            const faceImageData = context.getImageData(box.x, box.y, box.width, box.height);
+            const blueDetected = isBlueReflection(faceImageData);
 
-            // Initialize the face size if it's the first detection
-            if (!initialFaceSize) {
-                initialFaceSize = faceWidth;
-                instructions.innerText = "Move closer and farther from the camera";
-            }
-
-            // Clear the canvas
-            context.clearRect(0, 0, overlay.width, overlay.height);
-
-            // Draw a rectangle around the detected face
-            context.strokeStyle = faceMovementDetected ? 'green' : 'red';
-            context.lineWidth = 2;
-            context.strokeRect(box.x, box.y, box.width, box.height);
-
-            // Check if the face size has changed by at least 20%
-            if (Math.abs(faceWidth - initialFaceSize) > initialFaceSize * 0.2) {
-                faceMovementDetected = true;  // Mark as real movement
-                instructions.innerText = "Face movement detected!";
+            if (blueDetected) {
+                console.log("detected")
+                instructions.innerText = "Potential mobile device detected!";
+                instructions.style.color = "red";
             } else {
-                faceMovementDetected = false;
-                instructions.innerText = "Move closer and farther from the camera";
-            }
-
-            // Perform edge detection to look for a device in front of the camera
-            if (detectEdges()) {
-                instructions.innerText = "Edge detected! Please ensure no objects are in front of the camera.";
-                faceMovementDetected = false;
+                instructions.innerText = "No reflection detected.";
+                instructions.style.color = "green";
             }
         }
     }
 
-    // Edge detection function
-    function detectEdges() {
-        const edgeBuffer = 20;  // Distance from the edge to check for black pixels or uniform areas
-        const width = overlay.width;
-        const height = overlay.height;
+    // Check for blue pixels in face area to detect reflection
+    function isBlueReflection(imageData) {
+        const { data } = imageData;
+        let bluePixelCount = 0;
+        const totalPixels = data.length / 4;
+
+        for (let i = 0; i < data.length; i += 4) {
+            const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
+            if (b > 150 && r < 100 && g < 100) bluePixelCount++; // Detect predominantly blue pixels
+        }
         
-        // Get pixel data from canvas
-        const imageData = context.getImageData(0, 0, width, height);
-        const data = imageData.data;
-
-        // Check for uniform black or solid colors around the edges
-        return false && isUniformColorEdge(data, width, height, edgeBuffer);
+        // Consider reflection detected if blue pixels exceed a threshold
+        return (bluePixelCount / totalPixels) > 0.1;
     }
 
-    // Check if edge pixels are of uniform color
-    function isUniformColorEdge(data, width, height, edgeBuffer) {
-        const blackThreshold = 30;  // Threshold for considering a color as black or solid
-        let edgeUniform = true;
+    
 
-        // Check top and bottom rows
-        for (let x = edgeBuffer; x < width - edgeBuffer; x++) {
-            if (!isBlackOrSolid(data, x, 0, width, blackThreshold) || !isBlackOrSolid(data, x, height - 1, width, blackThreshold)) {
-                edgeUniform = false;
-                break;
-            }
-        }
-
-        // Check left and right columns
-        for (let y = edgeBuffer; y < height - edgeBuffer; y++) {
-            if (!isBlackOrSolid(data, 0, y, width, blackThreshold) || !isBlackOrSolid(data, width - 1, y, width, blackThreshold)) {
-                edgeUniform = false;
-                break;
-            }
-        }
-
-        return edgeUniform;
-    }
-
-    // Helper to check if a pixel is black or solid color
-    function isBlackOrSolid(data, x, y, width, threshold) {
-        const offset = (y * width + x) * 4;
-        const r = data[offset];
-        const g = data[offset + 1];
-        const b = data[offset + 2];
-
-        return r < threshold && g < threshold && b < threshold;
-    }
 </script>
-
 </html>
