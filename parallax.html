@@ -58,6 +58,9 @@
         <p id="loadingStatus">Loading models...</p>
     </div>
 
+    <div>
+        <img style="border:2px solid red;" id="myimage" src="" />
+    </div>
     <!-- Modal -->
     <div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true"
         style="padding: 0;">
@@ -86,9 +89,10 @@
         const openCameraBtn = document.getElementById('openCameraBtn');
         const loadingStatus = document.getElementById('loadingStatus');
         const cameraSelect = document.getElementById('cameraSelect');
+        const myimage = document.getElementById('myimage');
 
         async function loadModels() {
-            try {   
+            try {
                 console.log("Loading models...");
                 // Log each model loading step
                 await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
@@ -115,7 +119,7 @@
             const selectedCamera = isMobileDevice() ? cameraSelect.value : 'environment'; // Default to back camera for non-mobile
             const constraints = {
                 video: {
-                    facingMode: selectedCamera
+                    facingMode: selectedCamera,
                 }
             };
 
@@ -125,6 +129,14 @@
                         video.srcObject = stream;
                         video.play();
                         console.log("Camera started.");
+
+                        //checking the camera actual height and width
+                        const videoTrack = stream.getVideoTracks()[0];
+                        const settings = videoTrack.getSettings();
+                        const cameraWidth = settings.width;
+                        const cameraHeight = settings.height;
+                        console.log(`Camera resolution: ${cameraWidth}x${cameraHeight}`);
+
 
                         // Dynamically adjust canvas size to match video
                         video.onloadedmetadata = () => {
@@ -167,6 +179,10 @@
                     // Draw guider based on both conditions
                     const isFaceValid = areLandmarksInside && doesFaceCoverGuider;
                     drawFaceGuider(isFaceValid);
+
+                    if (isFaceValid) {
+                        console.log(video.videoHeight, video.videoWidth);
+                    }
                 } else {
                     drawFaceGuider(false);
                 }
@@ -237,6 +253,31 @@
             context.stroke();
         }
 
+        function captureImageAtCameraResolution() {
+            // Ensure video has loaded and has resolution data
+            if (video.videoWidth && video.videoHeight) {
+                // Set canvas dimensions to match video (camera's native resolution)
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+
+                // Draw the current frame from the video onto the canvas
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // Get the image data URL (in full camera resolution)
+                const imageDataUrl = canvas.toDataURL('image/png');
+                //console.log("Captured Image URL:", imageDataUrl);
+
+                // You can now use the imageDataUrl as needed
+                myimage.src = imageDataUrl;
+                return imageDataUrl;
+            } else {
+                console.warn("Video is not ready for capturing yet.");
+                return null;
+            }
+        }
+
         if (isMobileDevice()) {
             cameraSelect.style.display = 'block'; // Show the dropdown for mobile devices
         }
@@ -246,12 +287,45 @@
         document.getElementById('cameraModal').addEventListener('shown.bs.modal', startCamera);
 
         document.getElementById('cameraModal').addEventListener('hidden.bs.modal', function () {
+            captureImageAtCameraResolution();
             const stream = video.srcObject;
             const tracks = stream.getTracks();
             tracks.forEach(track => track.stop());
             video.srcObject = null;
             clearInterval(faceDetectionInterval);
         });
+
+        async function startCameraAndLogResolution() {
+            const video = document.createElement('video');
+
+            try {
+                // Request access to the user's camera
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+
+                // Wait for the video metadata to load, which includes resolution data
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        resolve();
+                    };
+                });
+
+                // Get the actual resolution of the camera
+                const cameraWidth = video.videoWidth;
+                const cameraHeight = video.videoHeight;
+
+                console.log(`Camera resolution: ${cameraWidth} x ${cameraHeight}`);
+
+                // Start playing the video
+                video.play();
+
+                // Optionally, add video to the document or use as needed
+                document.body.appendChild(video);
+            } catch (error) {
+                console.error("Error accessing the camera:", error);
+            }
+        }
+
     </script>
 
 </body>
