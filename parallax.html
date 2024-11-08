@@ -119,6 +119,8 @@
             const selectedCamera = isMobileDevice() ? cameraSelect.value : 'environment'; // Default to back camera for non-mobile
             const constraints = {
                 video: {
+                    width: { ideal: 4096 },
+                    height: { ideal: 2160 } ,
                     facingMode: selectedCamera,
                 }
             };
