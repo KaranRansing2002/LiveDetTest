@@ -93,6 +93,7 @@
         const myimage = document.getElementById('myimage');
         const myimage1 = document.getElementById('myimage1');
         let eyeClosed=false;
+        let coolDownTime=0;
 
         async function loadModels() {
             try {
@@ -187,7 +188,8 @@
 
                     if (isFaceValid) {
                         //console.log(video.videoHeight, video.videoWidth);
-                        if(detection?.landmarks)checkBlink(detection.landmarks);
+                        coolDownTime=coolDownTime>5 ? coolDownTime : coolDownTime+1;
+                        if(coolDownTime>=4)checkBlink(detection.landmarks);
                     }
                 } else {
                     drawFaceGuider(false);
