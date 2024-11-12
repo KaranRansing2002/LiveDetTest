@@ -59,7 +59,8 @@
     </div>
 
     <div>
-        <img style="border:2px solid red;" id="myimage" src="" />
+        <img style="border:2px solid red; margin-right: 4px;" id="myimage" src="" />
+        <img style="border:2px solid red;" id="myimage1" src="" />
     </div>
     <!-- Modal -->
     <div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true"
@@ -90,6 +91,8 @@
         const loadingStatus = document.getElementById('loadingStatus');
         const cameraSelect = document.getElementById('cameraSelect');
         const myimage = document.getElementById('myimage');
+        const myimage1 = document.getElementById('myimage1');
+        let eyeClosed=false;
 
         async function loadModels() {
             try {
@@ -183,13 +186,49 @@
                     drawFaceGuider(isFaceValid);
 
                     if (isFaceValid) {
-                        console.log(video.videoHeight, video.videoWidth);
+                        //console.log(video.videoHeight, video.videoWidth);
+                        if(detection?.landmarks)checkBlink(detection.landmarks);
                     }
                 } else {
                     drawFaceGuider(false);
                 }
             } catch (error) {
                 console.error("Error in face detection:", error);
+            }
+        }
+
+        function calculateEAR(eye) {
+            const A = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y); // Vertical distance between 1st and 5th landmarks
+            const B = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y); // Vertical distance between 2nd and 4th landmarks
+            const C = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y); // Horizontal distance between 0th and 3rd landmarks
+            return (A + B) / (2.0 * C); // EAR formula
+        }
+
+        function checkBlink(landmarks){
+            const leftEye = landmarks.getLeftEye();
+            const rightEye = landmarks.getRightEye();
+            const eyeThreshold=0.2699
+
+            // Calculate EAR for both eyes
+            const leftEAR = calculateEAR(leftEye);
+            const rightEAR = calculateEAR(rightEye);
+
+            // Check if both eyes are blinking (i.e., EAR below the threshold)
+            const EAR=(leftEAR+rightEAR)/2;
+            
+            eyeClosed=eyeClosed || (EAR<=eyeThreshold);
+            console.log("EAR - ",EAR,eyeClosed);
+            
+            let blinkDetected=false;
+
+            if(EAR>eyeThreshold && eyeClosed){
+                blinkDetected=true;
+            }
+
+            if (blinkDetected) {
+                console.log("Both eyes are blinking! - ",EAR);
+                captureImageAtCameraResolution();
+                closeModal();
             }
         }
 
@@ -280,14 +319,14 @@
             // }
 
             if (video.videoWidth && video.videoHeight) {
-                myimage.src=captureAndResizeImage(video);
+                myimage.src = captureAndResizeImage(video);
             } else {
                 console.warn("Video is not ready for capturing yet.");
                 return null;
             }
         }
 
-        function captureAndResizeImage(videoElement, targetWidth = 550, targetHeight = 780) {
+        function captureAndResizeImage(videoElement, targetWidth = 550, targetHeight = 720) {
             // Step 1: Create a canvas at the camera's maximum resolution
             const maxWidth = videoElement.videoWidth;
             const maxHeight = videoElement.videoHeight;
@@ -298,6 +337,7 @@
 
             // Draw the video frame onto the high-resolution canvas
             highResCtx.drawImage(videoElement, 0, 0, maxWidth, maxHeight);
+            myimage1.src = highResCanvas.toDataURL("image/png");
 
             // Step 2: Create another canvas for resizing the image to target dimensions
             const targetCanvas = document.createElement("canvas");
@@ -346,13 +386,24 @@
         document.getElementById('cameraModal').addEventListener('shown.bs.modal', startCamera);
 
         document.getElementById('cameraModal').addEventListener('hidden.bs.modal', function () {
-            captureImageAtCameraResolution();
+            //captureImageAtCameraResolution();
             const stream = video.srcObject;
             const tracks = stream.getTracks();
             tracks.forEach(track => track.stop());
             video.srcObject = null;
             clearInterval(faceDetectionInterval);
         });
+
+        function closeModal() {
+            // const stream = video.srcObject;
+            // const tracks = stream.getTracks();
+            // tracks.forEach(track => track.stop());
+            // video.srcObject = null;
+            // clearInterval(faceDetectionInterval);
+            const modalElement = document.getElementById('cameraModal');
+            const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+            modalInstance.hide();
+        }
 
         async function startCameraAndLogResolution() {
             const video = document.createElement('video');
