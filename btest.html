@@ -463,6 +463,7 @@
             tracks.forEach(track => track.stop());
             video.srcObject = null;
             clearInterval(faceDetectionInterval);
+            initializeAllBlinkValues();
         });
 
         function closeModal() {
@@ -474,7 +475,6 @@
             const modalElement = document.getElementById('cameraModal');
             const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
             modalInstance.hide();
-            initializeAllBlinkValues();
         }
 
         function initializeAllBlinkValues(){
