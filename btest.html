@@ -253,18 +253,19 @@
             const averageEAR = (leftEAR + rightEAR) / 2;
 
             // Dynamically set the threshold based on the baseline EAR
-            const EAR_THRESHOLD = 0.2699;
-
+            const EAR_THRESHOLD = baseEAR-0.01;
+            // console.log("avg base: ",averageEAR);
             // Check if average EAR falls below the calculated threshold
             if (averageEAR < EAR_THRESHOLD) {
                 blinkFrameCounter++;
-                //console.log("blinked--",blinkFrameCounter)
+                console.log("blinked--",blinkFrameCounter, averageEAR);
             } else {
                 if (blinkFrameCounter >= FRAME_THRESHOLD && averageEAR>=baseEAR) {
                     // Detected a blink if frames below threshold exceed limit
                     consecutiveBlinks++;
-                    console.log("Blink detected! Count:", consecutiveBlinks);
-                    captureImageAtCameraResolution();
+                    console.log("Blink detected! Count:", consecutiveBlinks,averageEAR,baseEAR);
+                    setTimeout(()=>captureImageAtCameraResolution(),0);
+                    // captureImageAtCameraResolution();
                     closeModal();
                 }
                 blinkFrameCounter = 0; // Reset counter if EAR rises above threshold
