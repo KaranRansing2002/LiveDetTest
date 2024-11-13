@@ -50,7 +50,7 @@
             <option value="user">Front Camera</option>
             <option value="environment">Back Camera</option>
         </select>
-        motion parallax
+        blink test EAR
         <button id="openCameraBtn" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#cameraModal"
             disabled>
             Open Camera
@@ -94,6 +94,21 @@
         const myimage1 = document.getElementById('myimage1');
         let eyeClosed=false;
         let coolDownTime=0;
+
+        //for blinkdetection
+        let baseEAR = 0; 
+        const EAR_THRESHOLD_MULTIPLIER = 0.7; // Multiplier to calculate blink threshold from base EAR
+        const FRAME_THRESHOLD = 2; // Frames the EAR must remain below threshold to count as a blink
+        let blinkFrameCounter = 0; // Counter for frames with EAR below threshold
+        let consecutiveBlinks = 0; // Counter for blinks within a short period
+
+        const INITIAL_FRAME_COUNT = 5; // Number of frames to average for baseline EAR calculation
+        let earSum = 0;
+        let frameCounter = 0;
+        let baseEARInitialized = false;
+        //end--
+
+        
 
         async function loadModels() {
             try {
@@ -188,8 +203,11 @@
 
                     if (isFaceValid) {
                         //console.log(video.videoHeight, video.videoWidth);
-                        coolDownTime=coolDownTime>25 ? coolDownTime : coolDownTime+1;
-                        if(coolDownTime>=15)checkBlink(detection.landmarks);
+                        await initializeEAR(detection);
+                        if(baseEARInitialized)detectBlink(detection);
+                    } else {
+                        frameCounter=0;
+                        earSum=0;
                     }
                 } else {
                     drawFaceGuider(false);
@@ -204,6 +222,55 @@
             const B = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y); // Vertical distance between 2nd and 4th landmarks
             const C = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y); // Horizontal distance between 0th and 3rd landmarks
             return (A + B) / (2.0 * C); // EAR formula
+        }
+
+        async function initializeEAR(detection) {
+            if (baseEARInitialized) return; // Skip if baseEAR is already set
+
+            const leftEye = detection.landmarks.getLeftEye();
+            const rightEye = detection.landmarks.getRightEye();
+            const initialLeftEAR = calculateEAR(leftEye);
+            const initialRightEAR = calculateEAR(rightEye);
+
+            // Add the EAR of the current frame to the sum
+            earSum += (initialLeftEAR + initialRightEAR) / 2;
+            //console.log(frameCounter,(initialLeftEAR + initialRightEAR) / 2)
+            frameCounter++;
+
+            // Once we've accumulated enough frames, calculate the average
+            if (frameCounter >= INITIAL_FRAME_COUNT) {
+                baseEAR = earSum / INITIAL_FRAME_COUNT;
+                baseEARInitialized = true; // Mark initialization as complete
+                console.log("Baseline EAR initialized:", baseEAR);
+            }
+        }
+
+        function detectBlink(detection) {
+            const leftEye = detection.landmarks.getLeftEye();
+            const rightEye = detection.landmarks.getRightEye();
+            const leftEAR = calculateEAR(leftEye);
+            const rightEAR = calculateEAR(rightEye);
+            const averageEAR = (leftEAR + rightEAR) / 2;
+
+            // Dynamically set the threshold based on the baseline EAR
+            const EAR_THRESHOLD = 0.2699;
+
+            // Check if average EAR falls below the calculated threshold
+            if (averageEAR < EAR_THRESHOLD) {
+                blinkFrameCounter++;
+                //console.log("blinked--",blinkFrameCounter)
+            } else {
+                if (blinkFrameCounter >= FRAME_THRESHOLD) {
+                    // Detected a blink if frames below threshold exceed limit
+                    consecutiveBlinks++;
+                    console.log("Blink detected! Count:", consecutiveBlinks);
+                    captureImageAtCameraResolution();
+                    closeModal();
+                }
+                blinkFrameCounter = 0; // Reset counter if EAR rises above threshold
+            }
+
+            return consecutiveBlinks;
         }
 
         function checkBlink(landmarks){
@@ -233,6 +300,8 @@
                 closeModal();
             }
         }
+
+        
 
         // Helper to get essential landmarks
         function getEssentialLandmarks(landmarks) {
@@ -405,8 +474,20 @@
             const modalElement = document.getElementById('cameraModal');
             const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
             modalInstance.hide();
+            initializeAllBlinkValues();
         }
 
+        function initializeAllBlinkValues(){
+            baseEAR = 0; 
+            EAR_THRESHOLD_MULTIPLIER = 0.7;
+            FRAME_THRESHOLD = 2;
+            blinkFrameCounter = 0;
+            consecutiveBlinks = 0;
+            INITIAL_FRAME_COUNT = 5;
+            earSum = 0;
+            frameCounter = 0;
+            baseEARInitialized = false;
+        }
     </script>
 
 </body>
