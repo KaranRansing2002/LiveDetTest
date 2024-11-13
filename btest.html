@@ -260,7 +260,7 @@
                 blinkFrameCounter++;
                 //console.log("blinked--",blinkFrameCounter)
             } else {
-                if (blinkFrameCounter >= FRAME_THRESHOLD) {
+                if (blinkFrameCounter >= FRAME_THRESHOLD && averageEAR>=baseEAR) {
                     // Detected a blink if frames below threshold exceed limit
                     consecutiveBlinks++;
                     console.log("Blink detected! Count:", consecutiveBlinks);
