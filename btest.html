@@ -123,7 +123,7 @@
         let baseEARInitialized = false;
         //end--
 
-        
+        let isImageCaptured=false;
 
         async function loadModels() {
             try {
@@ -180,7 +180,7 @@
                             overlay.height = video.videoHeight;
 
                             // Start face detection loop
-                            faceDetectionInterval = setInterval(detectSingleFace, 200);
+                            faceDetectionInterval = setInterval(detectSingleFace,200);
                         };
                     })
                     .catch(function (error) {
@@ -204,7 +204,7 @@
                     const areLandmarksInside = essentialLandmarks.every(({ name, position }) => {
                         const isInside = isPointInGuider(position.x, position.y);
                         if (!isInside) {
-                            console.log(`Outside guider: ${name} at (${position.x}, ${position.y})`);
+                            //console.log(`Outside guider: ${name} at (${position.x}, ${position.y})`);
                             showInstruction(`Outside guider: ${name}`,"red",20);
                         }
                         return isInside;
@@ -223,12 +223,11 @@
                         await initializeEAR(detection);
                         if(baseEARInitialized){
                             showInstruction("Blink now","#00FF00",40);
-                            detectBlink(detection);
+                            await detectBlink(detection);
 
-                        }else showInstruction("stay still",green,30);
+                        }else showInstruction("stay still","#00FF00",30);
 
                     } else {
-                        console.log(doesFaceCoverGuider)
                         if(!doesFaceCoverGuider){
                             showInstruction("please cover atleast 70-80% of your face inside the guider","red",20);
                         }
@@ -271,7 +270,7 @@
             }
         }
 
-        function detectBlink(detection) {
+        async function detectBlink(detection) {
             const leftEye = detection.landmarks.getLeftEye();
             const rightEye = detection.landmarks.getRightEye();
             const leftEAR = calculateEAR(leftEye);
@@ -290,7 +289,8 @@
                     // Detected a blink if frames below threshold exceed limit
                     consecutiveBlinks++;
                     console.log("Blink detected! Count:", consecutiveBlinks,averageEAR,baseEAR);
-                    setTimeout(()=>captureImageAtCameraResolution(),0);
+                    await captureImageAtCameraResolution();
+                    isImageCaptured=true;
                     // captureImageAtCameraResolution();
                     closeModal();
                 }
@@ -392,7 +392,7 @@
             context.stroke();
         }
 
-        function captureImageAtCameraResolution() {
+        async function captureImageAtCameraResolution() {
             //Ensure video has loaded and has resolution data
             // if (video.videoWidth && video.videoHeight) {
             //     // Set canvas dimensions to match video (camera's native resolution)
@@ -417,14 +417,14 @@
             // }
 
             if (video.videoWidth && video.videoHeight) {
-                myimage.src = captureAndResizeImage(video);
+                myimage.src = await captureAndResizeImage(video);
             } else {
                 console.warn("Video is not ready for capturing yet.");
                 return null;
             }
         }
 
-        function captureAndResizeImage(videoElement, targetWidth = 550, targetHeight = 720) {
+        async function captureAndResizeImage(videoElement, targetWidth = 550, targetHeight = 720) {
             // Step 1: Create a canvas at the camera's maximum resolution
             const maxWidth = videoElement.videoWidth;
             const maxHeight = videoElement.videoHeight;
@@ -465,12 +465,16 @@
             // Step 3: Draw the high-resolution image onto the target canvas with resizing
             targetCtx.drawImage(highResCanvas, -offsetX, -offsetY, renderWidth, renderHeight);
 
-            // Step 4: Get the resized image as a data URL or Blob
-            const resizedImageDataUrl = targetCanvas.toDataURL("image/png");  // Can also use .toBlob
+            
+            const blob = await new Promise((resolve) => targetCanvas.toBlob(resolve, "image/webp"));
+    
+            // Log the size in KB
+            console.log("Resized Image Size:", (blob.size / 1024).toFixed(2), "KB");
 
-            // Display or download the image as needed
-            //console.log("Resized Image Data URL:", resizedImageDataUrl);
+            // Generate a URL for the Blob that can be used as an image source
+            const resizedImageDataUrl = URL.createObjectURL(blob);
             return resizedImageDataUrl;
+
         }
 
 
@@ -511,13 +515,15 @@
             if(style!="")instructions.style=style;
         }
 
+        setTimeout(()=>closeModal(),60000);
+
         function initializeAllBlinkValues(){
             baseEAR = 0; 
-            EAR_THRESHOLD_MULTIPLIER = 0.7;
-            FRAME_THRESHOLD = 2;
+            //EAR_THRESHOLD_MULTIPLIER = 0.7;
+            //FRAME_THRESHOLD = 2;
             blinkFrameCounter = 0;
             consecutiveBlinks = 0;
-            INITIAL_FRAME_COUNT = 5;
+            //INITIAL_FRAME_COUNT = 5;
             earSum = 0;
             frameCounter = 0;
             baseEARInitialized = false;
