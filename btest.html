@@ -465,6 +465,7 @@
             // Step 3: Draw the high-resolution image onto the target canvas with resizing
             targetCtx.drawImage(highResCanvas, -offsetX, -offsetY, renderWidth, renderHeight);
 
+            setTimeout(async()=>await detectFaceAndEyesOfCapturedImage(targetCanvas),500);
 
             const blob = await new Promise((resolve) => targetCanvas.toBlob(resolve, "image/webp"));
 
@@ -473,10 +474,29 @@
 
             // Generate a URL for the Blob that can be used as an image source
             const resizedImageDataUrl = URL.createObjectURL(blob);
+            //console.log("here");
             return resizedImageDataUrl;
 
         }
 
+        async function detectFaceAndEyesOfCapturedImage(canvas){
+            const detections = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+            console.log(detections)
+            if (!detections) {
+                console.error("No face detected.");
+                return false; // No face detected, return false
+            }
+            const landmarks = detections.landmarks;
+            const leftEyeF = landmarks.getLeftEye();
+            const rightEyeF = landmarks.getRightEye();
+            const avgEARF = (calculateEAR(leftEyeF)+calculateEAR(rightEyeF)) / 2;
+            if(avgEARF<(baseEAR-0.01)){
+                console.log("closed eyes are detected")
+                return false;
+            }
+            console.log("image is valid");
+            return true;
+        }
 
 
         if (isMobileDevice()) {
