@@ -86,7 +86,7 @@
                         border-radius: 8px;
                         text-align: center;
                         z-index: 10;">
-                        while blinking try to close your eyes for atleast a second  
+                        while blinking try to close your eyes for atleast a second
                     </div>
                 </div>
             </div>
@@ -108,10 +108,10 @@
         const myimage1 = document.getElementById('myimage1');
         const instructions = document.getElementById('instructionsOverlay');
 
-        let eyeClosed=false;
+        let eyeClosed = false;
 
         //for blinkdetection
-        let baseEAR = 0; 
+        let baseEAR = 0;
         const EAR_THRESHOLD_MULTIPLIER = 0.7; // Multiplier to calculate blink threshold from base EAR
         const FRAME_THRESHOLD = 2; // Frames the EAR must remain below threshold to count as a blink
         let blinkFrameCounter = 0; // Counter for frames with EAR below threshold
@@ -123,7 +123,7 @@
         let baseEARInitialized = false;
         //end--
 
-        let isImageCaptured=false;
+        let isImageCaptured = false;
 
         async function loadModels() {
             try {
@@ -153,19 +153,11 @@
             const selectedCamera = isMobileDevice() ? cameraSelect.value : 'environment'; // Default to back camera for non-mobile
             let constraints = {
                 video: {
-                    width: 1280,
-                    height: 960,
+                    width: isMobileDevice() ? { ideal: 720 } : 1280, // Lower resolution for mobile devices
+                    height: isMobileDevice() ? { ideal: 550 } : 960, // Lower resolution for mobile devices
                     facingMode: selectedCamera,
                 }
             };
-
-            if(isMobileDevice()){
-                constraints={
-                    width: 720,
-                    height: 550,
-                    facingMode: selectedCamera,
-                }
-            }
 
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 navigator.mediaDevices.getUserMedia(constraints)
@@ -188,7 +180,7 @@
                             overlay.height = video.videoHeight;
 
                             // Start face detection loop
-                            faceDetectionInterval = setInterval(detectSingleFace,200);
+                            faceDetectionInterval = setInterval(detectSingleFace, 200);
                         };
                     })
                     .catch(function (error) {
@@ -213,7 +205,7 @@
                         const isInside = isPointInGuider(position.x, position.y);
                         if (!isInside) {
                             //console.log(`Outside guider: ${name} at (${position.x}, ${position.y})`);
-                            showInstruction(`Outside guider: ${name}`,"red",20);
+                            showInstruction(`Outside guider: ${name}`, "red", 20);
                         }
                         return isInside;
                     });
@@ -229,18 +221,18 @@
                         //console.log(video.videoHeight, video.videoWidth);
                         showInstruction("");
                         await initializeEAR(detection);
-                        if(baseEARInitialized){
-                            showInstruction("Blink now","#00FF00",40);
+                        if (baseEARInitialized) {
+                            showInstruction("Blink now", "#00FF00", 40);
                             await detectBlink(detection);
 
-                        }else showInstruction("stay still","#00FF00",30);
+                        } else showInstruction("stay still", "#00FF00", 30);
 
                     } else {
-                        if(!doesFaceCoverGuider){
-                            showInstruction("please cover atleast 70-80% of your face inside the guider","red",20);
+                        if (!doesFaceCoverGuider) {
+                            showInstruction("please cover atleast 70-80% of your face inside the guider", "red", 20);
                         }
-                        frameCounter=0;
-                        earSum=0;
+                        frameCounter = 0;
+                        earSum = 0;
                     }
                 } else {
                     drawFaceGuider(false);
@@ -286,19 +278,19 @@
             const averageEAR = (leftEAR + rightEAR) / 2;
 
             // Dynamically set the threshold based on the baseline EAR
-            const EAR_THRESHOLD = baseEAR-0.01;
+            const EAR_THRESHOLD = baseEAR - 0.01;
             // console.log("avg base: ",averageEAR);
             // Check if average EAR falls below the calculated threshold
             if (averageEAR < EAR_THRESHOLD) {
                 blinkFrameCounter++;
-                console.log("blinked--",blinkFrameCounter, averageEAR);
+                console.log("blinked--", blinkFrameCounter, averageEAR);
             } else {
-                if (blinkFrameCounter >= FRAME_THRESHOLD && averageEAR>=baseEAR) {
+                if (blinkFrameCounter >= FRAME_THRESHOLD && averageEAR >= baseEAR) {
                     // Detected a blink if frames below threshold exceed limit
                     consecutiveBlinks++;
-                    console.log("Blink detected! Count:", consecutiveBlinks,averageEAR,baseEAR);
+                    console.log("Blink detected! Count:", consecutiveBlinks, averageEAR, baseEAR);
                     await captureImageAtCameraResolution();
-                    isImageCaptured=true;
+                    isImageCaptured = true;
                     // captureImageAtCameraResolution();
                     closeModal();
                 }
@@ -308,35 +300,35 @@
             return consecutiveBlinks;
         }
 
-        function checkBlink(landmarks){
+        function checkBlink(landmarks) {
             const leftEye = landmarks.getLeftEye();
             const rightEye = landmarks.getRightEye();
-            const eyeThreshold=0.2699
+            const eyeThreshold = 0.2699
 
             // Calculate EAR for both eyes
             const leftEAR = calculateEAR(leftEye);
             const rightEAR = calculateEAR(rightEye);
 
             // Check if both eyes are blinking (i.e., EAR below the threshold)
-            const EAR=(leftEAR+rightEAR)/2;
-            
-            eyeClosed=eyeClosed || (EAR<=eyeThreshold);
-            console.log("EAR - ",EAR,eyeClosed);
-            
-            let blinkDetected=false;
+            const EAR = (leftEAR + rightEAR) / 2;
 
-            if(EAR>eyeThreshold && eyeClosed){
-                blinkDetected=true;
+            eyeClosed = eyeClosed || (EAR <= eyeThreshold);
+            console.log("EAR - ", EAR, eyeClosed);
+
+            let blinkDetected = false;
+
+            if (EAR > eyeThreshold && eyeClosed) {
+                blinkDetected = true;
             }
 
             if (blinkDetected) {
-                console.log("Both eyes are blinking! - ",EAR);
+                console.log("Both eyes are blinking! - ", EAR);
                 captureImageAtCameraResolution();
                 closeModal();
             }
         }
 
-        
+
 
         // Helper to get essential landmarks
         function getEssentialLandmarks(landmarks) {
@@ -473,9 +465,9 @@
             // Step 3: Draw the high-resolution image onto the target canvas with resizing
             targetCtx.drawImage(highResCanvas, -offsetX, -offsetY, renderWidth, renderHeight);
 
-            
+
             const blob = await new Promise((resolve) => targetCanvas.toBlob(resolve, "image/webp"));
-    
+
             // Log the size in KB
             console.log("Resized Image Size:", (blob.size / 1024).toFixed(2), "KB");
 
@@ -516,17 +508,17 @@
             modalInstance.hide();
         }
 
-        function showInstruction(message,color="",fontSize="",style=""){
-            instructions.textContent=message;
-            if(color!="")instructions.style.color=color;
-            if(fontSize!="")instructions.style.fontSize=`${fontSize}px`;
-            if(style!="")instructions.style=style;
+        function showInstruction(message, color = "", fontSize = "", style = "") {
+            instructions.textContent = message;
+            if (color != "") instructions.style.color = color;
+            if (fontSize != "") instructions.style.fontSize = `${fontSize}px`;
+            if (style != "") instructions.style = style;
         }
 
-        setTimeout(()=>closeModal(),60000);
+        setTimeout(() => closeModal(), 60000);
 
-        function initializeAllBlinkValues(){
-            baseEAR = 0; 
+        function initializeAllBlinkValues() {
+            baseEAR = 0;
             //EAR_THRESHOLD_MULTIPLIER = 0.7;
             //FRAME_THRESHOLD = 2;
             blinkFrameCounter = 0;
