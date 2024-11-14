@@ -50,7 +50,7 @@
             <option value="user">Front Camera</option>
             <option value="environment">Back Camera</option>
         </select>
-        blink test EAR
+        motion parallax
         <button id="openCameraBtn" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#cameraModal"
             disabled>
             Open Camera
@@ -74,20 +74,6 @@
                 <div class="modal-body" style="position: relative; padding: 0px;">
                     <video id="video" autoplay></video>
                     <canvas id="overlay"></canvas>
-                    <div id="instructionsOverlay" style="
-                        position: absolute;
-                        top: 20px;
-                        left: 50%;
-                        transform: translateX(-50%);
-                        color: white;
-                        font-size: 1.2em;
-                        background: rgba(0, 0, 0, 0.3);
-                        padding: 10px 20px;
-                        border-radius: 8px;
-                        text-align: center;
-                        z-index: 10;">
-                        while blinking try to close your eyes for atleast a second  
-                    </div>
                 </div>
             </div>
         </div>
@@ -106,24 +92,8 @@
         const cameraSelect = document.getElementById('cameraSelect');
         const myimage = document.getElementById('myimage');
         const myimage1 = document.getElementById('myimage1');
-        const instructions = document.getElementById('instructionsOverlay');
-
-        let eyeClosed=false;
-
-        //for blinkdetection
-        let baseEAR = 0; 
-        const EAR_THRESHOLD_MULTIPLIER = 0.7; // Multiplier to calculate blink threshold from base EAR
-        const FRAME_THRESHOLD = 2; // Frames the EAR must remain below threshold to count as a blink
-        let blinkFrameCounter = 0; // Counter for frames with EAR below threshold
-        let consecutiveBlinks = 0; // Counter for blinks within a short period
-
-        const INITIAL_FRAME_COUNT = 5; // Number of frames to average for baseline EAR calculation
-        let earSum = 0;
-        let frameCounter = 0;
-        let baseEARInitialized = false;
-        //end--
-
-        let isImageCaptured=false;
+        let eyeClosed = false;
+        let coolDownTime = 0;
 
         async function loadModels() {
             try {
@@ -151,21 +121,13 @@
         function startCamera() {
 
             const selectedCamera = isMobileDevice() ? cameraSelect.value : 'environment'; // Default to back camera for non-mobile
-            let constraints = {
+            const constraints = {
                 video: {
                     width: 1280,
                     height: 960,
                     facingMode: selectedCamera,
                 }
             };
-
-            if(isMobileDevice()){
-                constraints={
-                    width: 720,
-                    height: 550,
-                    facingMode: selectedCamera,
-                }
-            }
 
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 navigator.mediaDevices.getUserMedia(constraints)
@@ -188,7 +150,7 @@
                             overlay.height = video.videoHeight;
 
                             // Start face detection loop
-                            faceDetectionInterval = setInterval(detectSingleFace,200);
+                            faceDetectionInterval = setInterval(detectSingleFace, 200);
                         };
                     })
                     .catch(function (error) {
@@ -198,11 +160,11 @@
                 console.error("Browser does not support camera access.");
             }
         }
-
+        let detection
         async function detectSingleFace() {
             try {
                 // Detect a single face with landmarks
-                let detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+                detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
 
                 if (detection && detection.landmarks) {
                     const box = detection.alignedRect.box; // Bounding box of the detected face
@@ -213,7 +175,6 @@
                         const isInside = isPointInGuider(position.x, position.y);
                         if (!isInside) {
                             //console.log(`Outside guider: ${name} at (${position.x}, ${position.y})`);
-                            showInstruction(`Outside guider: ${name}`,"red",20);
                         }
                         return isInside;
                     });
@@ -227,20 +188,7 @@
 
                     if (isFaceValid) {
                         //console.log(video.videoHeight, video.videoWidth);
-                        showInstruction("");
-                        await initializeEAR(detection);
-                        if(baseEARInitialized){
-                            showInstruction("Blink now","#00FF00",40);
-                            await detectBlink(detection);
-
-                        }else showInstruction("stay still","#00FF00",30);
-
-                    } else {
-                        if(!doesFaceCoverGuider){
-                            showInstruction("please cover atleast 70-80% of your face inside the guider","red",20);
-                        }
-                        frameCounter=0;
-                        earSum=0;
+                        checkBlink(detection.landmarks);
                     }
                 } else {
                     drawFaceGuider(false);
@@ -257,86 +205,81 @@
             return (A + B) / (2.0 * C); // EAR formula
         }
 
-        async function initializeEAR(detection) {
-            if (baseEARInitialized) return; // Skip if baseEAR is already set
+        let nam = 0;
+        let blinked = false;
+        let inside = true; // Initially the face is inside the frame
+        let h_ = 0;
+        let prevh_ = 0;
+        let opening = false;
+        let opening1 = 1000;
+        let opening2 = 1000;
+        let lowest = 0;
+        let image1 = 0, image2 = 0, image3 = 0;
 
-            const leftEye = detection.landmarks.getLeftEye();
-            const rightEye = detection.landmarks.getRightEye();
-            const initialLeftEAR = calculateEAR(leftEye);
-            const initialRightEAR = calculateEAR(rightEye);
+        // Function to check blink and eye opening
+        async function checkBlink(detection) {
+            
+            nam++; // Increase the counter for each check
 
-            // Add the EAR of the current frame to the sum
-            earSum += (initialLeftEAR + initialRightEAR) / 2;
-            //console.log(frameCounter,(initialLeftEAR + initialRightEAR) / 2)
-            frameCounter++;
-
-            // Once we've accumulated enough frames, calculate the average
-            if (frameCounter >= INITIAL_FRAME_COUNT) {
-                baseEAR = earSum / INITIAL_FRAME_COUNT;
-                baseEARInitialized = true; // Mark initialization as complete
-                console.log("Baseline EAR initialized:", baseEAR);
+            if (nam == 1 || nam == 2) {
+                // Initialize/reset values on the first or second frame
+                blinked = false;
+                inside = false;
+                h_ = prevh_; // Set h_ to prevh_ at the start
             }
-        }
 
-        async function detectBlink(detection) {
+            // Update images to simulate eye detection frames
+            image3 = image1;
+            image2 = image1;
+            image1 = prevh_;
+
+            // Track lowest height
+            if (image1 < h_) {
+                lowest = h_;
+            }
+
+            // Store the previous height for the next frame
+            prevh_ = h_;
+
+            // Get the eye landmarks from the detection object
             const leftEye = detection.landmarks.getLeftEye();
             const rightEye = detection.landmarks.getRightEye();
-            const leftEAR = calculateEAR(leftEye);
-            const rightEAR = calculateEAR(rightEye);
-            const averageEAR = (leftEAR + rightEAR) / 2;
 
-            // Dynamically set the threshold based on the baseline EAR
-            const EAR_THRESHOLD = baseEAR-0.01;
-            // console.log("avg base: ",averageEAR);
-            // Check if average EAR falls below the calculated threshold
-            if (averageEAR < EAR_THRESHOLD) {
-                blinkFrameCounter++;
-                console.log("blinked--",blinkFrameCounter, averageEAR);
-            } else {
-                if (blinkFrameCounter >= FRAME_THRESHOLD && averageEAR>=baseEAR) {
-                    // Detected a blink if frames below threshold exceed limit
-                    consecutiveBlinks++;
-                    console.log("Blink detected! Count:", consecutiveBlinks,averageEAR,baseEAR);
-                    await captureImageAtCameraResolution();
-                    isImageCaptured=true;
-                    // captureImageAtCameraResolution();
-                    closeModal();
+            // Calculate the height for the left and right eyes
+            const leftEyeHeight = leftEye[4].y - leftEye[1].y; // Example: height of the left eye
+            const rightEyeHeight = rightEye[4].y - rightEye[1].y; // Example: height of the right eye
+
+            // We will choose the maximum height of the two eyes
+            h_ = Math.max(leftEyeHeight, rightEyeHeight);
+
+            console.log(h_,prevh_);
+            // Eye opening logic
+            if (h_ > prevh_) {
+                opening2 = h_;
+                if (prevh_ > image1) {
+                    opening1 = prevh_;
+                    if (opening1 > opening2) {
+                        opening = true; // Eye opening detected
+                    }
                 }
-                blinkFrameCounter = 0; // Reset counter if EAR rises above threshold
+            } else {
+                opening1 = 1000;
+                opening2 = 1000;
+                opening = false;
             }
 
-            return consecutiveBlinks;
+            // Blink detection logic based on height difference
+            if (((prevh_ - h_) > 1 || (h_ - prevh_) > 1) && inside === true) {
+                blinked = true; // Blink detected
+            } else {
+                // No blink detected, reset the flag
+                blinked = false;
+            }
+
+            // Optionally, you can log the results for testing purposes
+            console.log(`Blink detected: ${blinked}, Eye Opening detected: ${opening}`);
         }
 
-        function checkBlink(landmarks){
-            const leftEye = landmarks.getLeftEye();
-            const rightEye = landmarks.getRightEye();
-            const eyeThreshold=0.2699
-
-            // Calculate EAR for both eyes
-            const leftEAR = calculateEAR(leftEye);
-            const rightEAR = calculateEAR(rightEye);
-
-            // Check if both eyes are blinking (i.e., EAR below the threshold)
-            const EAR=(leftEAR+rightEAR)/2;
-            
-            eyeClosed=eyeClosed || (EAR<=eyeThreshold);
-            console.log("EAR - ",EAR,eyeClosed);
-            
-            let blinkDetected=false;
-
-            if(EAR>eyeThreshold && eyeClosed){
-                blinkDetected=true;
-            }
-
-            if (blinkDetected) {
-                console.log("Both eyes are blinking! - ",EAR);
-                captureImageAtCameraResolution();
-                closeModal();
-            }
-        }
-
-        
 
         // Helper to get essential landmarks
         function getEssentialLandmarks(landmarks) {
@@ -400,7 +343,7 @@
             context.stroke();
         }
 
-        async function captureImageAtCameraResolution() {
+        function captureImageAtCameraResolution() {
             //Ensure video has loaded and has resolution data
             // if (video.videoWidth && video.videoHeight) {
             //     // Set canvas dimensions to match video (camera's native resolution)
@@ -425,14 +368,14 @@
             // }
 
             if (video.videoWidth && video.videoHeight) {
-                myimage.src = await captureAndResizeImage(video);
+                myimage.src = captureAndResizeImage(video);
             } else {
                 console.warn("Video is not ready for capturing yet.");
                 return null;
             }
         }
 
-        async function captureAndResizeImage(videoElement, targetWidth = 550, targetHeight = 720) {
+        function captureAndResizeImage(videoElement, targetWidth = 550, targetHeight = 720) {
             // Step 1: Create a canvas at the camera's maximum resolution
             const maxWidth = videoElement.videoWidth;
             const maxHeight = videoElement.videoHeight;
@@ -473,16 +416,12 @@
             // Step 3: Draw the high-resolution image onto the target canvas with resizing
             targetCtx.drawImage(highResCanvas, -offsetX, -offsetY, renderWidth, renderHeight);
 
-            
-            const blob = await new Promise((resolve) => targetCanvas.toBlob(resolve, "image/webp"));
-    
-            // Log the size in KB
-            console.log("Resized Image Size:", (blob.size / 1024).toFixed(2), "KB");
+            // Step 4: Get the resized image as a data URL or Blob
+            const resizedImageDataUrl = targetCanvas.toDataURL("image/png");  // Can also use .toBlob
 
-            // Generate a URL for the Blob that can be used as an image source
-            const resizedImageDataUrl = URL.createObjectURL(blob);
+            // Display or download the image as needed
+            //console.log("Resized Image Data URL:", resizedImageDataUrl);
             return resizedImageDataUrl;
-
         }
 
 
@@ -502,7 +441,6 @@
             tracks.forEach(track => track.stop());
             video.srcObject = null;
             clearInterval(faceDetectionInterval);
-            initializeAllBlinkValues();
         });
 
         function closeModal() {
@@ -516,27 +454,6 @@
             modalInstance.hide();
         }
 
-        function showInstruction(message,color="",fontSize="",style=""){
-            instructions.textContent=message;
-            if(color!="")instructions.style.color=color;
-            if(fontSize!="")instructions.style.fontSize=`${fontSize}px`;
-            if(style!="")instructions.style=style;
-        }
-
-        setTimeout(()=>closeModal(),60000);
-
-        function initializeAllBlinkValues(){
-            baseEAR = 0; 
-            //EAR_THRESHOLD_MULTIPLIER = 0.7;
-            //FRAME_THRESHOLD = 2;
-            blinkFrameCounter = 0;
-            consecutiveBlinks = 0;
-            //INITIAL_FRAME_COUNT = 5;
-            earSum = 0;
-            frameCounter = 0;
-            baseEARInitialized = false;
-            showInstruction("");
-        }
     </script>
 
 </body>
