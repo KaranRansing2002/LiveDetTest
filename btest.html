@@ -228,6 +228,7 @@
                         } else showInstruction("stay still", "#00FF00", 30);
 
                     } else {
+                        blinkFrameCounter=0;
                         if (!doesFaceCoverGuider) {
                             showInstruction("please cover atleast 70-80% of your face inside the guider", "red", 20);
                         }
@@ -293,6 +294,9 @@
                     isImageCaptured = true;
                     // captureImageAtCameraResolution();
                     closeModal();
+                }
+                else if(blinkFrameCounter >= FRAME_THRESHOLD && baseEAR>averageEAR){
+                    showInstruction("EYES wider please","yellow",20);
                 }
                 blinkFrameCounter = 0; // Reset counter if EAR rises above threshold
             }
