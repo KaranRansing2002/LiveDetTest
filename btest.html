@@ -113,6 +113,7 @@
         //for blinkdetection
         let baseEAR = 0;
         const EAR_THRESHOLD_MULTIPLIER = 0.7; // Multiplier to calculate blink threshold from base EAR
+        let SUBTRACT_VALUE=0.02
         const FRAME_THRESHOLD = 2; // Frames the EAR must remain below threshold to count as a blink
         let blinkFrameCounter = 0; // Counter for frames with EAR below threshold
         let consecutiveBlinks = 0; // Counter for blinks within a short period
@@ -279,7 +280,7 @@
             const averageEAR = (leftEAR + rightEAR) / 2;
 
             // Dynamically set the threshold based on the baseline EAR
-            const EAR_THRESHOLD = baseEAR - 0.01;
+            const EAR_THRESHOLD = baseEAR - SUBTRACT_VALUE;
             // console.log("avg base: ",averageEAR);
             // Check if average EAR falls below the calculated threshold
             if (averageEAR < EAR_THRESHOLD) {
@@ -551,6 +552,7 @@
             earSum = 0;
             frameCounter = 0;
             baseEARInitialized = false;
+            SUBTRACT_VALUE=0.02
             showInstruction("");
         }
     </script>
