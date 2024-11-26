@@ -206,7 +206,11 @@
                         const isInside = isPointInGuider(position.x, position.y);
                         if (!isInside) {
                             //console.log(`Outside guider: ${name} at (${position.x}, ${position.y})`);
-                            showInstruction(`Outside guider: ${name}`, "red", 20);
+                            //showInstruction(`Outside guider: ${name}`, "red", 20);
+                            if(name=="leftEye") showInstruction("MOVE RIGHT ➡","red","30");
+                            else if(name=="rightEye") showInstruction("MOVE LEFT ⬅","red","30");
+                            else if(name=="mouth") showInstruction("MOVE UPWARDS ⬆","red","30");
+                            else showInstruction(`Outside guider: ${name}`, "red", 20);
                         }
                         return isInside;
                     });
@@ -231,7 +235,7 @@
                     } else {
                         blinkFrameCounter=0;
                         if (!doesFaceCoverGuider) {
-                            showInstruction("please cover atleast 70-80% of your face inside the guider", "red", 20);
+                            showInstruction("MOVE FORWARD", "red", 30);
                         }
                         frameCounter = 0;
                         earSum = 0;
@@ -305,7 +309,7 @@
             return consecutiveBlinks;
         }
 
-        function checkBlink(landmarks) {
+        function checkBlink(landmarks) { //currently not in use
             const leftEye = landmarks.getLeftEye();
             const rightEye = landmarks.getRightEye();
             const eyeThreshold = 0.2699
@@ -374,7 +378,7 @@
             const faceArea = box.width * box.height;
             const guiderArea = guideWidth * guideHeight;
 
-            return faceArea >= guiderArea * 0.6; // 70% threshold
+            return faceArea >= guiderArea * 0.75; // 60% threshold
         }
 
         // Function to draw the face guider
@@ -416,7 +420,7 @@
             //     // You can now use the imageDataUrl as needed
             //     myimage.src = imageDataUrl;
             //     return imageDataUrl;
-            // } else {
+            // } el se {
             //     console.warn("Video is not ready for capturing yet.");
             //     return null;
             // }
@@ -472,7 +476,7 @@
 
             setTimeout(async()=>await detectFaceAndEyesOfCapturedImage(targetCanvas),500);
 
-            const blob = await new Promise((resolve) => targetCanvas.toBlob(resolve, "image/webp"));
+            const blob = await new Promise((resolve) => targetCanvas.toBlob(resolve, "image/jpeg"));
 
             // Log the size in KB
             console.log("Resized Image Size:", (blob.size / 1024).toFixed(2), "KB");
