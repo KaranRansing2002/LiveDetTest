@@ -314,7 +314,7 @@
                 console.log("blinked--", blinkFrameCounter, averageEAR);
             } else {
                 eyeOpeningFrameCounter++;
-                if (blinkFrameCounter >= FRAME_THRESHOLD && eyeOpeningFrameCounter>=2 && averageEAR >= baseEAR) {
+                if (blinkFrameCounter >= FRAME_THRESHOLD && eyeOpeningFrameCounter>=1 && averageEAR >= baseEAR) {
                     // Detected a blink if frames below threshold exceed limit
                     consecutiveBlinks++;
                     console.log("Blink detected! Count:", consecutiveBlinks, averageEAR, baseEAR);
@@ -326,7 +326,7 @@
                 else if(blinkFrameCounter >= FRAME_THRESHOLD && baseEAR>averageEAR){
                     showInstruction("EYES wider please","yellow",20);
                 }
-                if(eyeOpeningFrameCounter>=2) {
+                if(eyeOpeningFrameCounter>=1) {
                     blinkFrameCounter = 0; // Reset counter if EAR rises above threshold
                     eyeOpeningFrameCounter=0;
                 }
