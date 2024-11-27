@@ -40,6 +40,18 @@
             pointer-events: none;
             /* Prevent interactions with the canvas */
         }
+
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 95%; /* Adjust modal width */
+                height: 600px; /* Allow height to adjust */
+                max-width: 300px; /* Limit the modal size */
+            }
+
+            #video {
+                height: 100%; /* Maintain aspect ratio */
+            }
+        }
     </style>
 </head>
 
@@ -126,7 +138,7 @@
         //end--
 
         //[height,width]
-        const guiderConstraint={mobile:[0.45,0.38],desk:[0.55,0.35]};
+        const guiderConstraint={mobile:[0.35,0.35],desk:[0.55,0.35]};
 
         let isImageCaptured = false;
 
@@ -185,7 +197,7 @@
                             overlay.height = video.videoHeight;
 
                             // Start face detection loop
-                            faceDetectionInterval = setInterval(detectSingleFace, 200);
+                            faceDetectionInterval = setInterval(detectSingleFace, 400);
                         };
                     })
                     .catch(function (error) {
@@ -549,7 +561,7 @@
         function showInstruction(message, color = "", fontSize = "", style = "") {
             instructions.textContent = message;
             if (color != "") instructions.style.color = color;
-            if (fontSize != "") instructions.style.fontSize = `${fontSize}px`;
+            if (fontSize != "") instructions.style.fontSize = `${isMobileDevice() ? 25 : fontSize}px`;
             if (style != "") instructions.style = style;
         }
 
