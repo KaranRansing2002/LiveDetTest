@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Feed Modal</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .modal-dialog {
+            max-width: 100%;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .modal-content {
+            width: 550px;
+            height: 720px;
+            border-radius: 0;
+            overflow: hidden;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            /* Prevent interactions with the canvas */
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container text-center" style="margin-top: 20%;">
+        <select id="cameraSelect" class="form-select mb-3" aria-label="Camera Select" style="display: none;">
+            <option value="user">Front Camera</option>
+            <option value="environment">Back Camera</option>
+        </select>
+        recalibrate blink test EAR
+        <button id="openCameraBtn" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#cameraModal"
+            disabled>
+            Open Camera
+        </button>
+        <p id="loadingStatus">Loading models...</p>
+    </div>
+
+    <div>
+        <img style="border:2px solid red; margin-right: 4px;" id="myimage" src="" />
+        <img style="border:2px solid red;" id="myimage1" src="" />
+    </div>
+    <!-- Modal -->
+    <div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true"
+        style="padding: 0;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="cameraModalLabel">Camera Feed</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="position: relative; padding: 0px;">
+                    <video id="video" autoplay></video>
+                    <canvas id="overlay"></canvas>
+                    <div id="instructionsOverlay" style="
+                        position: absolute;
+                        top: 20px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        color: white;
+                        font-size: 1.2em;
+                        background: rgba(0, 0, 0, 0.3);
+                        padding: 10px 20px;
+                        border-radius: 8px;
+                        text-align: center;
+                        z-index: 10;">
+                        while blinking try to close your eyes for atleast a second
+                    </div>
+                    <div id="instructionsOverlaybottom" style="
+                        display: none;
+                        position: absolute;
+                        bottom: 20px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        color: #00FF00;
+                        font-size: 30px;
+                        background: rgba(0, 0, 0, 0.3);
+                        padding: 10px 20px;
+                        border-radius: 8px;
+                        text-align: center;
+                        z-index: 10;">
+                        Recalibrating Now stay still
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS with Popper.js -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="./face-api.min.js"></script> <!-- Ensure this path is correct -->
+    <script>
+
+        const video = document.getElementById('video');
+        const overlay = document.getElementById('overlay');
+        const context = overlay.getContext('2d');
+        const openCameraBtn = document.getElementById('openCameraBtn');
+        const loadingStatus = document.getElementById('loadingStatus');
+        const cameraSelect = document.getElementById('cameraSelect');
+        const myimage = document.getElementById('myimage');
+        const myimage1 = document.getElementById('myimage1');
+        const instructions = document.getElementById('instructionsOverlay');
+
+        let eyeClosed = false;
+
+        //for blinkdetection
+        let baseEAR = 0;
+        const EAR_THRESHOLD_MULTIPLIER = 0.7; // Multiplier to calculate blink threshold from base EAR
+        let SUBTRACT_VALUE=0.02
+        const FRAME_THRESHOLD = 1; // Frames the EAR must remain below threshold to count as a blink
+        let blinkFrameCounter = 0; // Counter for frames with EAR below threshold
+        let consecutiveBlinks = 0; // Counter for blinks within a short period
+
+        const INITIAL_FRAME_COUNT = 5; // Number of frames to average for baseline EAR calculation
+        let earSum = 0;
+        let frameCounter = 0;
+        let baseEARInitialized = false;
+        let eyeOpeningFrameCounter=0;
+        //end--
+
+        //[height,width]
+        const guiderConstraint={mobile:[0.45,0.38],desk:[0.55,0.35]};
+
+        let isImageCaptured = false;
+
+        let recalTimeOut;
+
+        async function loadModels() {
+            try {
+                console.log("Loading models...");
+                // Log each model loading step
+                await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
+                console.log("tinyFaceDetector model loaded.");
+
+                await faceapi.nets.faceLandmark68Net.loadFromUri('./models');
+                console.log("faceLandmark68Net model loaded.");
+
+                openCameraBtn.disabled = false; // Enable the button once models are loaded
+                loadingStatus.textContent = 'Models loaded. You can now open the camera!';
+            } catch (error) {
+                loadingStatus.textContent = 'Error loading models. Check your paths.';
+                console.error("Error loading models:", error);
+            }
+        }
+
+        function isMobileDevice() {
+            return /Mobi|Android/i.test(navigator.userAgent); // Basic mobile detection
+        }
+        var faceDetectionInterval;
+
+        function startCamera() {
+
+            const selectedCamera = isMobileDevice() ? cameraSelect.value : 'environment'; // Default to back camera for non-mobile
+            let constraints = {
+                video: {
+                    width: isMobileDevice() ? { ideal: 720 } : 1280, // Lower resolution for mobile devices
+                    height: isMobileDevice() ? { ideal: 550 } : 960, // Lower resolution for mobile devices
+                    facingMode: selectedCamera,
+                }
+            };
+
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia(constraints)
+                    .then(function (stream) {
+                        video.srcObject = stream;
+                        video.play();
+                        console.log("Camera started.");
+
+                        //checking the camera actual height and width
+                        const videoTrack = stream.getVideoTracks()[0];
+                        const settings = videoTrack.getSettings();
+                        const cameraWidth = settings.width;
+                        const cameraHeight = settings.height;
+                        console.log(`Camera resolution: ${cameraWidth}x${cameraHeight}`);
+
+
+                        // Dynamically adjust canvas size to match video
+                        video.onloadedmetadata = () => {
+                            overlay.width = video.videoWidth;
+                            overlay.height = video.videoHeight;
+
+                            // Start face detection loop
+                            faceDetectionInterval = setInterval(detectSingleFace, 400);
+                            recalTimeOut = setTimeout(() => recalibrate(), 10000);
+                        };
+                    })
+                    .catch(function (error) {
+                        console.error("Error accessing camera:", error);
+                    });
+            } else {
+                console.error("Browser does not support camera access.");
+            }
+        }
+
+        async function detectSingleFace() {
+            try {
+                // Detect a single face with landmarks
+                let detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+
+                if (detection && detection.landmarks) {
+                    const box = detection.alignedRect.box; // Bounding box of the detected face
+                    const essentialLandmarks = getEssentialLandmarks(detection.landmarks);
+
+                    // Check if all essential landmarks are inside the guider
+                    const areLandmarksInside = essentialLandmarks.every(({ name, position }) => {
+                        const isInside = isPointInGuider(position.x, position.y);
+                        if (!isInside) {
+                            //console.log(`Outside guider: ${name} at (${position.x}, ${position.y})`);
+                            //showInstruction(`Outside guider: ${name}`, "red", 20);
+                            if(name=="leftEye") showInstruction("MOVE RIGHT ➡","red","30");
+                            else if(name=="rightEye") showInstruction("MOVE LEFT ⬅","red","30");
+                            else if(name=="mouth") showInstruction("MOVE UPWARDS ⬆","red","30");
+                            else showInstruction(`Outside guider: ${name}`, "red", 20);
+                        }
+                        return isInside;
+                    });
+
+                    // Check if face covers more than 70% of the guider
+                    const doesFaceCoverGuider = doesFaceCoverEnough(box);
+
+                    // Draw guider based on both conditions
+                    const isFaceValid = areLandmarksInside && doesFaceCoverGuider;
+                    drawFaceGuider(isFaceValid);
+
+                    if (isFaceValid) {
+                        //console.log(video.videoHeight, video.videoWidth);
+                        showInstruction("");
+                        await initializeEAR(detection);
+                        if (baseEARInitialized) {
+                            showInstruction("Blink now", "#00FF00", 40);
+                            await detectBlink(detection);
+
+                        } else showInstruction("stay still", "#00FF00", 30);
+
+                    } else {
+                        blinkFrameCounter=0;
+                        if (!doesFaceCoverGuider) {
+                            showInstruction("MOVE FORWARD", "red", 30);
+                        }
+                        frameCounter = 0;
+                        earSum = 0;
+                    }
+                } else {
+                    drawFaceGuider(false);
+                }
+            } catch (error) {
+                console.error("Error in face detection:", error);
+            }
+        }
+
+        function calculateEAR(eye) {
+            const A = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y); // Vertical distance between 1st and 5th landmarks
+            const B = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y); // Vertical distance between 2nd and 4th landmarks
+            const C = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y); // Horizontal distance between 0th and 3rd landmarks
+            return (A + B) / (2.0 * C); // EAR formula
+        }
+
+        async function initializeEAR(detection) {
+            if (baseEARInitialized) return; // Skip if baseEAR is already set
+
+            const leftEye = detection.landmarks.getLeftEye();
+            const rightEye = detection.landmarks.getRightEye();
+            const initialLeftEAR = calculateEAR(leftEye);
+            const initialRightEAR = calculateEAR(rightEye);
+
+            // Add the EAR of the current frame to the sum
+            earSum += (initialLeftEAR + initialRightEAR) / 2;
+            //console.log(frameCounter,(initialLeftEAR + initialRightEAR) / 2)
+            frameCounter++;
+
+            // Once we've accumulated enough frames, calculate the average
+            if (frameCounter >= INITIAL_FRAME_COUNT) {
+                baseEAR = earSum / INITIAL_FRAME_COUNT;
+                baseEARInitialized = true; // Mark initialization as complete
+                console.log("Baseline EAR initialized:", baseEAR);
+            }
+        }
+
+        async function detectBlink(detection) {
+            const leftEye = detection.landmarks.getLeftEye();
+            const rightEye = detection.landmarks.getRightEye();
+            const leftEAR = calculateEAR(leftEye);
+            const rightEAR = calculateEAR(rightEye);
+            const averageEAR = (leftEAR + rightEAR) / 2;
+
+            // Dynamically set the threshold based on the baseline EAR
+            const EAR_THRESHOLD = baseEAR - SUBTRACT_VALUE;
+            // console.log("avg base: ",averageEAR);
+            // Check if average EAR falls below the calculated threshold
+            if (averageEAR < EAR_THRESHOLD) {
+                blinkFrameCounter++;
+                console.log("blinked--", blinkFrameCounter, averageEAR);
+            } else {
+                eyeOpeningFrameCounter++;
+                if (blinkFrameCounter >= FRAME_THRESHOLD && eyeOpeningFrameCounter>=2 && averageEAR >= baseEAR) {
+                    // Detected a blink if frames below threshold exceed limit
+                    consecutiveBlinks++;
+                    console.log("Blink detected! Count:", consecutiveBlinks, averageEAR, baseEAR);
+                    await captureImageAtCameraResolution();
+                    isImageCaptured = true;
+                    // captureImageAtCameraResolution();
+                    closeModal();
+                }
+                else if(blinkFrameCounter >= FRAME_THRESHOLD && baseEAR>averageEAR){
+                    showInstruction("EYES wider please","yellow",20);
+                }
+                if(eyeOpeningFrameCounter>=2) {
+                    blinkFrameCounter = 0; // Reset counter if EAR rises above threshold
+                    eyeOpeningFrameCounter=0;
+                }
+            }
+
+            return consecutiveBlinks;
+        }
+
+        function checkBlink(landmarks) { //currently not in use
+            const leftEye = landmarks.getLeftEye();
+            const rightEye = landmarks.getRightEye();
+            const eyeThreshold = 0.2699
+
+            // Calculate EAR for both eyes
+            const leftEAR = calculateEAR(leftEye);
+            const rightEAR = calculateEAR(rightEye);
+
+            // Check if both eyes are blinking (i.e., EAR below the threshold)
+            const EAR = (leftEAR + rightEAR) / 2;
+
+            eyeClosed = eyeClosed || (EAR <= eyeThreshold);
+            console.log("EAR - ", EAR, eyeClosed);
+
+            let blinkDetected = false;
+
+            if (EAR > eyeThreshold && eyeClosed) {
+                blinkDetected = true;
+            }
+
+            if (blinkDetected) {
+                console.log("Both eyes are blinking! - ", EAR);
+                captureImageAtCameraResolution();
+                closeModal();
+            }
+        }
+
+
+
+        // Helper to get essential landmarks
+        function getEssentialLandmarks(landmarks) {
+            return [
+                { name: 'leftEye', position: landmarks.getLeftEye()[0] },
+                { name: 'rightEye', position: landmarks.getRightEye()[0] },
+                { name: 'nose', position: landmarks.getNose()[0] },
+                { name: 'mouth', position: landmarks.getMouth()[0] }
+            ];
+        }
+
+        // Function to check if a point is within the face guider's bounds
+        function isPointInGuider(x, y, box) {
+            const guideHeightPercentage = (window.innerWidth <= 460) ? guiderConstraint.mobile[0] : guiderConstraint.desk[0];
+            const guideWidthPercentage = (window.innerWidth <= 460) ? guiderConstraint.mobile[1] : guiderConstraint.desk[1];
+
+            const guideHeight = video.videoHeight * guideHeightPercentage;
+            const guideWidth = video.videoWidth * guideWidthPercentage;
+            const guideX = video.videoWidth / 2;
+            const guideY = video.videoHeight / 2;
+
+            const radiusX = guideWidth / 2;
+            const radiusY = guideHeight / 2;
+
+            const normalizedX = (x - guideX) / radiusX;
+            const normalizedY = (y - guideY) / radiusY;
+
+            return (normalizedX ** 2 + normalizedY ** 2) <= 1;
+        }
+
+        function doesFaceCoverEnough(box) {
+            const guideHeightPercentage = (window.innerWidth <= 460) ? guiderConstraint.mobile[0] : guiderConstraint.desk[0];
+            const guideWidthPercentage = (window.innerWidth <= 460) ? guiderConstraint.mobile[1] : guiderConstraint.desk[1];
+
+            const guideHeight = video.videoHeight * guideHeightPercentage;
+            const guideWidth = video.videoWidth * guideWidthPercentage;
+
+            const faceArea = box.width * box.height;
+            const guiderArea = guideWidth * guideHeight;
+
+            return faceArea >= guiderArea * 0.65; // 60% threshold
+        }
+
+        // Function to draw the face guider
+        function drawFaceGuider(isAllInGuider) {
+            context.clearRect(0, 0, overlay.width, overlay.height);
+            const guideLineColor = isAllInGuider ? '#00FF00' : 'red';
+
+            const guideHeightPercentage = (window.innerWidth <= 460) ? guiderConstraint.mobile[0] : guiderConstraint.desk[0];
+            const guideWidthPercentage = (window.innerWidth <= 460) ? guiderConstraint.mobile[1] : guiderConstraint.desk[1];
+
+            const guideHeight = video.videoHeight * guideHeightPercentage;
+            const guideWidth = video.videoWidth * guideWidthPercentage;
+            const guideX = video.videoWidth / 2;
+            const guideY = video.videoHeight / 2;
+
+            context.strokeStyle = guideLineColor;
+            context.lineWidth = 4;
+            context.beginPath();
+            context.ellipse(guideX, guideY, guideWidth / 1.3, guideHeight / 1.75, 0, 0, 2 * Math.PI);
+            context.stroke();
+        }
+
+        async function captureImageAtCameraResolution() {
+            //Ensure video has loaded and has resolution data
+            // if (video.videoWidth && video.videoHeight) {
+            //     // Set canvas dimensions to match video (camera's native resolution)
+            //     const canvas = document.createElement('canvas');
+            //     canvas.width = video.videoWidth;
+            //     canvas.height = video.videoHeight;
+
+            //     // Draw the current frame from the video onto the canvas
+            //     const ctx = canvas.getContext('2d');
+            //     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            //     // Get the image data URL (in full camera resolution)
+            //     const imageDataUrl = canvas.toDataURL('image/png');
+            //     //console.log("Captured Image URL:", imageDataUrl);
+
+            //     // You can now use the imageDataUrl as needed
+            //     myimage.src = imageDataUrl;
+            //     return imageDataUrl;
+            // } el se {
+            //     console.warn("Video is not ready for capturing yet.");
+            //     return null;
+            // }
+
+            if (video.videoWidth && video.videoHeight) {
+                myimage.src = await captureAndResizeImage(video);
+            } else {
+                console.warn("Video is not ready for capturing yet.");
+                return null;
+            }
+        }
+
+        async function captureAndResizeImage(videoElement, targetWidth = 550, targetHeight = 720) {
+            // Step 1: Create a canvas at the camera's maximum resolution
+            const maxWidth = videoElement.videoWidth;
+            const maxHeight = videoElement.videoHeight;
+            const highResCanvas = document.createElement("canvas");
+            highResCanvas.width = maxWidth;
+            highResCanvas.height = maxHeight;
+            const highResCtx = highResCanvas.getContext("2d");
+
+            // Draw the video frame onto the high-resolution canvas
+            highResCtx.drawImage(videoElement, 0, 0, maxWidth, maxHeight);
+            myimage1.src = highResCanvas.toDataURL("image/png");
+
+            // Step 2: Create another canvas for resizing the image to target dimensions
+            const targetCanvas = document.createElement("canvas");
+            targetCanvas.width = targetWidth;
+            targetCanvas.height = targetHeight;
+            const targetCtx = targetCanvas.getContext("2d");
+
+            // Calculate aspect ratios
+            const sourceAspectRatio = maxWidth / maxHeight;
+            const targetAspectRatio = targetWidth / targetHeight;
+
+            let renderWidth, renderHeight, offsetX = 0, offsetY = 0;
+
+            // Determine the dimensions to draw the high-res image onto the target canvas
+            if (sourceAspectRatio > targetAspectRatio) {
+                // Image is wider than target, crop width
+                renderHeight = targetHeight;
+                renderWidth = targetHeight * sourceAspectRatio;
+                offsetX = (renderWidth - targetWidth) / 2;
+            } else {
+                // Image is taller than target, crop height
+                renderWidth = targetWidth;
+                renderHeight = targetWidth / sourceAspectRatio;
+                offsetY = (renderHeight - targetHeight) / 2;
+            }
+
+            // Step 3: Draw the high-resolution image onto the target canvas with resizing
+            targetCtx.drawImage(highResCanvas, -offsetX, -offsetY, renderWidth, renderHeight);
+
+            setTimeout(async()=>await detectFaceAndEyesOfCapturedImage(targetCanvas),500);
+
+            const blob = await new Promise((resolve) => targetCanvas.toBlob(resolve, "image/jpeg"));
+
+            // Log the size in KB
+            console.log("Resized Image Size:", (blob.size / 1024).toFixed(2), "KB");
+
+            // Generate a URL for the Blob that can be used as an image source
+            const resizedImageDataUrl = URL.createObjectURL(blob);
+            //console.log("here");
+            return resizedImageDataUrl;
+
+        }
+
+        async function detectFaceAndEyesOfCapturedImage(canvas){
+            const detections = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+            console.log(detections)
+            if (!detections) {
+                console.error("No face detected.");
+                return false; // No face detected, return false
+            }
+            const landmarks = detections.landmarks;
+            const leftEyeF = landmarks.getLeftEye();
+            const rightEyeF = landmarks.getRightEye();
+            const avgEARF = (calculateEAR(leftEyeF)+calculateEAR(rightEyeF)) / 2;
+            if(avgEARF<(baseEAR-0.01)){
+                console.log("closed eyes are detected")
+                return false;
+            }
+            console.log("image is valid");
+            return true;
+        }
+
+
+        if (isMobileDevice()) {
+            cameraSelect.style.display = 'block'; // Show the dropdown for mobile devices
+        }
+
+        loadModels();
+
+        document.getElementById('cameraModal').addEventListener('shown.bs.modal', startCamera);
+
+        document.getElementById('cameraModal').addEventListener('hidden.bs.modal', function () {
+            //captureImageAtCameraResolution();
+            const stream = video.srcObject;
+            const tracks = stream.getTracks();
+            tracks.forEach(track => track.stop());
+            video.srcObject = null;
+            clearInterval(faceDetectionInterval);
+            initializeAllBlinkValues();
+        });
+
+        function closeModal() {
+            // const stream = video.srcObject;
+            // const tracks = stream.getTracks();
+            // tracks.forEach(track => track.stop());
+            // video.srcObject = null;
+            // clearInterval(faceDetectionInterval);
+            const modalElement = document.getElementById('cameraModal');
+            const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+            modalInstance.hide();
+        }
+
+        function showInstruction(message, color = "", fontSize = "", style = "") {
+            instructions.textContent = message;
+            if (color != "") instructions.style.color = color;
+            if (fontSize != "") instructions.style.fontSize = `${fontSize}px`;
+            if (style != "") instructions.style = style;
+        }
+
+        function initializeAllBlinkValues() {
+            baseEAR = 0;
+            //EAR_THRESHOLD_MULTIPLIER = 0.7;
+            //FRAME_THRESHOLD = 2;
+            blinkFrameCounter = 0;
+            consecutiveBlinks = 0;
+            //INITIAL_FRAME_COUNT = 5;
+            earSum = 0;
+            frameCounter = 0;
+            baseEARInitialized = false;
+            SUBTRACT_VALUE=0.02
+            showInstruction("");
+            clearInterval(recalTimeOut);
+        }
+
+        function recalibrate(){
+            document.getElementById('instructionsOverlaybottom').style.display="block";
+            initializeAllBlinkValues();
+            setTimeout(()=>{
+                document.getElementById('instructionsOverlaybottom').style.display="none";
+                recalTimeOut = setTimeout(() => recalibrate(), 10000);
+            },3000);
+        }
+    </script>
+
+</body>
+
+</html>
