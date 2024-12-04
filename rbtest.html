@@ -512,7 +512,8 @@
             // Step 3: Draw the high-resolution image onto the target canvas with resizing
             targetCtx.drawImage(highResCanvas, -offsetX, -offsetY, renderWidth, renderHeight);
 
-            setTimeout(async()=>await detectFaceAndEyesOfCapturedImage(targetCanvas),500);
+            const cc=baseEAR;
+            if(myimage1.src)setTimeout(async()=>await detectFaceAndEyesOfCapturedImage(highResCanvas,cc),500);
 
             const blob = await new Promise((resolve) => targetCanvas.toBlob(resolve, "image/jpeg"));
 
@@ -526,7 +527,7 @@
 
         }
 
-        async function detectFaceAndEyesOfCapturedImage(canvas){
+        async function detectFaceAndEyesOfCapturedImage(canvas,bear){
             const detections = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
             console.log(detections)
             if (!detections) {
@@ -537,11 +538,12 @@
             const leftEyeF = landmarks.getLeftEye();
             const rightEyeF = landmarks.getRightEye();
             const avgEARF = (calculateEAR(leftEyeF)+calculateEAR(rightEyeF)) / 2;
-            if(avgEARF<(baseEAR-0.01)){
+            if(avgEARF<(bear-0.01)){
                 console.log("closed eyes are detected")
                 return false;
             }
-            console.log("image is valid");
+        
+            console.log("image is valid","avgEAR of capturedImage : ",avgEARF,"baseEAr : ",bear);
             return true;
         }
 
